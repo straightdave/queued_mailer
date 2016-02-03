@@ -20,12 +20,12 @@ end
 module PonyConf
   Charset = 'utf-8'
   SMTP_Options = {
-    :address        => 'smtp.mxhichina.com',
+    :address        => '#########',
     :port           => '25',
-    :user_name      => 'noreply@hanfeizishuo.com',
+    :user_name      => '#########',
     :password       => '#########',
     :authentication => :plain,
-    :domain         => "mail.hanfeizishuo.com"
+    :domain         => '#########'
   }
 end
 
@@ -43,7 +43,7 @@ begin
     :host     => 'localhost',
     :username => 'dave',
     :password => '########',
-    :database => 'xxx'
+    :database => '########'
   )
   raise "[mailer] #{Time.now} : cannot create Mysql2 client" unless mc
 rescue
@@ -85,10 +85,12 @@ pid = fork do
         :via         => :smtp,
         :via_options => PonyConf::SMTP_Options
       )
-
-      puts "  gonna update status in mail_logs for id = #{ mail["log_id"] } ..."
-      mc.query("UPDATE mail_logs SET status = 2, updated_at = now() WHERE id = #{ mail["log_id"] }")
       puts "  mail sent successfully!"
+
+      if mail["log_id"]
+        puts "  gonna update status in mail_logs for id = #{ mail["log_id"] } ..."
+        mc.query("UPDATE mail_logs SET status = 2, updated_at = now() WHERE id = #{ mail["log_id"] }")
+      end
     rescue
       puts "[mailer] Exception in waiting loop:"
       puts $!.message
