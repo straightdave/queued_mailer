@@ -1,6 +1,14 @@
 require 'redis'
 require 'json'
 require 'pony'
+require 'mysql2'
+
+trap("INT") {
+  puts "=== wait for child process to exit ..."
+  wait
+  puts "=== XXX Mailer gracefully exit"
+  exit
+}
 
 module RedisConf
   Host = '127.0.0.1'
@@ -10,61 +18,82 @@ module RedisConf
 end
 
 module PonyConf
-  From = 'eyaswoo@163.com'
+  Charset = 'utf-8'
   SMTP_Options = {
-    :address        => 'smtp.163.com',
+    :address        => 'smtp.mxhichina.com',
     :port           => '25',
-    :user_name      => 'eyaswoo',
-    :password       => 'Password01!',
-    :authentication => :plain, # :plain, :login, :cram_md5, no auth by default
-    :domain         => "localhost.localdomain" # the HELO domain provided by the client to the server
+    :user_name      => 'noreply@hanfeizishuo.com',
+    :password       => '#########',
+    :authentication => :plain,
+    :domain         => "mail.hanfeizishuo.com"
   }
 end
 
 begin
-  puts "[mailer] #{Time.now} : starting Redis client ..."
+  puts "[mailer] #{Time.now} : init Redis client ..."
   rc = Redis.new(
     :host => RedisConf::Host,
     :port => RedisConf::Port,
     :db   => RedisConf::DB
   )
   raise "[mailer] #{Time.now} : cannot create Redis client" unless rc
+
+  puts "[mailer] #{Time.now} : init Mysql2 client ... "
+  mc = Mysql2::Client.new(
+    :host     => 'localhost',
+    :username => 'dave',
+    :password => '########',
+    :database => 'xxx'
+  )
+  raise "[mailer] #{Time.now} : cannot create Mysql2 client" unless mc
 rescue
   puts $!.message
-  puts "[mailer] #{Time.now} : quitting ..."
+  puts "[mailer] #{Time.now} : exit ..."
+  exit
 end
 
+include Process
 
-
-while true
+pid = fork do
   trap("INT") {
-    puts "get ctrl-c, break the loop..."
-    break
+    puts "get ctrl-c, exit ..."
+    exit
   }
 
-  begin
-    puts "[mailer] #{Time.now} : waiting for next job ..."
+  trap("TERM") {
+    puts "get TERM signal, exit ..."
+    exit
+  }
 
-    job = rc.brpop("validation")
-    puts "[mailer] #{Time.now} : job get =>"
+  while true
+    begin
+      puts "[mailer] #{Time.now} : waiting for next job ..."
 
-    mail = JSON.parse(job[1])
-    puts "  list name: #{job[0]}, mail: #{mail}"
-    puts "  gonna send mail to #{mail["to"]} ..."
+      job = rc.brpop("validation")
+      puts "[mailer] #{Time.now} : job get =>"
 
-    Pony.mail(
-      :to          => mail["to"],
-      :subject     => mail["subject"],
-      :body        => mail["content"],
-      :from        => PonyConf::From,
-      :via         => :smtp,
-      :via_options => PonyConf::SMTP_Options
-    )
-    puts "  mail sent successfully!"
-  rescue
-    puts "[mailer] Exception in waiting loop:"
-    puts $!.message
+      mail = JSON.parse(job[1])
+      puts "  list name: #{job[0]}, mail: #{mail}"
+      puts "  gonna send mail to #{mail["to"]} ..."
+
+      Pony.mail(
+        :to          => mail["to"],
+        :from        => mail["from"],
+        :subject     => mail["subject"],
+        :html_body   => mail["body"],
+        :charset     => PonyConf::Charset,
+        :via         => :smtp,
+        :via_options => PonyConf::SMTP_Options
+      )
+
+      puts "  gonna update status in mail_logs for id = #{ mail["log_id"] } ..."
+      mc.query("UPDATE mail_logs SET status = 2, updated_at = now() WHERE id = #{ mail["log_id"] }")
+      puts "  mail sent successfully!"
+    rescue
+      puts "[mailer] Exception in waiting loop:"
+      puts $!.message
+    end
   end
 end
 
-puts "Gracefully exit"
+wait
