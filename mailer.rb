@@ -20,12 +20,12 @@ end
 module PonyConf
   Charset = 'utf-8'
   SMTP_Options = {
-    :address        => '#########',
+    :address        => '######',
     :port           => '25',
-    :user_name      => '#########',
-    :password       => '#########',
+    :user_name      => '######',
+    :password       => '######',
     :authentication => :plain,
-    :domain         => '#########'
+    :domain         => '######'
   }
 end
 
@@ -36,16 +36,16 @@ begin
     :port => RedisConf::Port,
     :db   => RedisConf::DB
   )
-  raise "[mailer] #{Time.now} : cannot create Redis client" unless rc
 
   puts "[mailer] #{Time.now} : init Mysql2 client ... "
   mc = Mysql2::Client.new(
     :host     => 'localhost',
-    :username => 'dave',
-    :password => '########',
-    :database => '########'
+    :username => '######',
+    :password => '######',
+    :database => '######'
   )
-  raise "[mailer] #{Time.now} : cannot create Mysql2 client" unless mc
+
+  puts "[mailer] #{Time.now} : running child, see child's log ... "
 rescue
   puts $!.message
   puts "[mailer] #{Time.now} : exit ..."
@@ -55,26 +55,37 @@ end
 include Process
 
 pid = fork do
+  puts "[mailer child] #{Time.now} : init logging file ..."
+  log_file = File.new(File.dirname(__FILE__) + "/log/mailer.log", 'a+')
+  log_file.sync = true
+
+  log_file.puts
+  log_file.puts "=============================================="
+  log_file.puts "[mailer child] #{Time.now} : init logging file ..."
+
   trap("INT") {
-    puts "get ctrl-c, exit ..."
+    log_file.puts "[mailer child] #{Time.now} : get ctrl-c, exit ..."
+    log_file.close unless log_file.nil?
     exit
   }
 
   trap("TERM") {
-    puts "get TERM signal, exit ..."
+    puts "[mailer child] #{Time.now} : get TERM signal, exit ..."
+    log_file.close unless log_file.nil?
     exit
   }
 
   while true
     begin
-      puts "[mailer] #{Time.now} : waiting for next job ..."
+      puts "[mailer child] #{Time.now} : reading redis queue for next job ..."
+      log_file.puts "[mailer child] #{Time.now} : reading redis queue for next job ..."
 
       job = rc.brpop("validation")
-      puts "[mailer] #{Time.now} : job get =>"
+      log_file.puts "[mailer child] #{Time.now} : job get =>"
 
       mail = JSON.parse(job[1])
-      puts "  list name: #{job[0]}, mail: #{mail}"
-      puts "  gonna send mail to #{mail["to"]} ..."
+      log_file.puts "  list name: #{job[0]}, mail: #{mail}"
+      log_file.puts "  gonna send mail to #{mail["to"]} ..."
 
       Pony.mail(
         :to          => mail["to"],
@@ -85,15 +96,20 @@ pid = fork do
         :via         => :smtp,
         :via_options => PonyConf::SMTP_Options
       )
-      puts "  mail sent successfully!"
+      log_file.puts "  mail sent successfully!"
 
       if mail["log_id"]
-        puts "  gonna update status in mail_logs for id = #{ mail["log_id"] } ..."
+        log_file.puts "  gonna update status in mail_logs for id = #{ mail["log_id"] } ..."
         mc.query("UPDATE mail_logs SET status = 2, updated_at = now() WHERE id = #{ mail["log_id"] }")
       end
+    rescue Redis::CannotConnectError => e
+      log_file.puts $!.message
+      log_file.puts "[mailer child] #{Time.now} : exit ..."
+      puts "[mailer child] #{Time.now} : exit since fatal redis issue ..."
+      exit
     rescue
-      puts "[mailer] Exception in waiting loop:"
-      puts $!.message
+      log_file.puts "[mailer child] #{Time.now} : Exception in waiting loop:"
+      log_file.puts $!.message
     end
   end
 end
