@@ -10,6 +10,9 @@ trap("INT") {
   exit
 }
 
+#===========
+# config
+#===========
 module RedisConf
   Host = '127.0.0.1'
   Port = 6379
@@ -29,6 +32,16 @@ module PonyConf
   }
 end
 
+module MySQLConf
+  Host = 'localhost'
+  User = '#######'
+  Pass = '#######'
+  DB   = 'xxx'
+end
+
+#==================
+# main process
+#==================
 begin
   puts "[mailer] #{Time.now} : init Redis client ..."
   rc = Redis.new(
@@ -39,10 +52,10 @@ begin
 
   puts "[mailer] #{Time.now} : init Mysql2 client ... "
   mc = Mysql2::Client.new(
-    :host     => 'localhost',
-    :username => '######',
-    :password => '######',
-    :database => '######'
+    :host     => MySQLConf::Host,
+    :username => MySQLConf::User,
+    :password => MySQLConf::Pass,
+    :database => MySQLConf::DB
   )
 
   puts "[mailer] #{Time.now} : running child, see child's log ... "
