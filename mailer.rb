@@ -54,10 +54,11 @@ begin
 
   puts "[mailer] #{Time.now} : init Mysql2 client ... "
   mc = Mysql2::Client.new(
-    :host     => MySQLConf::Host,
-    :username => MySQLConf::User,
-    :password => MySQLConf::Pass,
-    :database => MySQLConf::DB
+    :host      => MySQLConf::Host,
+    :username  => MySQLConf::User,
+    :password  => MySQLConf::Pass,
+    :database  => MySQLConf::DB,
+    :reconnect => true
   )
 
   puts "[mailer] #{Time.now} : running child, see child's log ... "
@@ -107,7 +108,7 @@ pid = fork do
 
       Pony.mail(
         :to          => mail["to"],
-        :from        => mail["from"],
+        :from        => PonyConf::SMTP_Options[:user_name],
         :subject     => mail["subject"],
         :html_body   => mail["body"],
         :charset     => PonyConf::Charset,
