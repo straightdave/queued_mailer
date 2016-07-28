@@ -23,25 +23,27 @@ end
 module PonyConf
   Charset = 'utf-8'
   SMTP_Options = {
-    :address        => '######',
+    :address        => 'smtp.mxhichina.com',
     :port           => '25',
-    :user_name      => '######',
+    :user_name      => 'noreply@shifeishuo.com',
     :password       => '######',
     :authentication => :plain,
-    :domain         => '######'
+    :domain         => 'mail.shifeishuo.com'
   }
 end
 
 module MySQLConf
   Host = 'localhost'
-  User = '#######'
-  Pass = '#######'
+  User = 'root'
+  Pass = '123123'
   DB   = 'xxx'
 end
 
 #==================
 # main process
 #==================
+
+# 1. starting deamon
 begin
   puts "[mailer] #{Time.now} : init Redis client ..."
   rc = Redis.new(
@@ -65,9 +67,12 @@ rescue
   exit
 end
 
+# 2. fork child process
 include Process
 
 pid = fork do
+  # inside child process
+
   puts "[mailer child] #{Time.now} : init logging file ..."
   log_file = File.new(File.dirname(__FILE__) + "/log/mailer.log", 'a+')
   log_file.sync = true
@@ -127,4 +132,5 @@ pid = fork do
   end
 end
 
+# 3. main process waits here
 wait
